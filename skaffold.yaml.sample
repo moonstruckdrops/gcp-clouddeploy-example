@@ -1,0 +1,110 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: app
+build:
+  artifacts:
+    - image: {your_docker_image_repository}
+      docker:
+        dockerfile: ./Dockerfile
+  tagPolicy:
+    gitCommit:
+      ignoreChanges: true
+  googleCloudBuild:
+    projectId: {your_project_id_for_development}
+    region: {your_location}
+profiles:
+  - name: development
+    manifests:
+      rawYaml:
+        - resources/development/run_service.yaml
+    deploy:
+      cloudrun:
+        projectid: {your_project_id_for_development}
+        region: {your_location}
+  - name: staging
+    manifests:
+      rawYaml:
+        - resources/staging/run_service.yaml
+    deploy:
+      cloudrun:
+        projectid: {your_project_id_for_staging}
+        region: {your_location}
+  - name: production
+    manifests:
+      rawYaml:
+        - resources/production/run_service.yaml
+    deploy:
+      cloudrun:
+        projectid: {your_project_id_for_production}
+        region: {your_location}
+customActions:
+  - name: setup
+    containers:
+      - name: setup
+        image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+        command:
+          - "bash"
+          - "-c"
+          - |
+            gsutil cp gs://${CLOUD_DEPLOY_DELIVERY_PIPELINE}/${CLOUD_DEPLOY_RELEASE}.tar.gz .
+            tar xzvf ${CLOUD_DEPLOY_RELEASE}.tar.gz
+            project={your_project_id_for_development}
+            case ${CLOUD_DEPLOY_TARGET} in
+              "staging")
+                project={your_project_id_for_staging}
+                ;;
+              "production")
+                project={your_project_id_for_production}
+                ;;
+              *)
+                ;;
+            esac
+            gcloud builds submit --config ./hooks/cloudbuild.setup.yaml --region {your_location} --no-source --project ${project}
+  - name: post-deploy
+    containers:
+      - name: deploy-appengine
+        image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+        command:
+          - "bash"
+          - "-c"
+          - |
+            gsutil cp gs://${CLOUD_DEPLOY_DELIVERY_PIPELINE}/${CLOUD_DEPLOY_RELEASE}.tar.gz .
+            tar xzvf ${CLOUD_DEPLOY_RELEASE}.tar.gz
+            gsutil cp gs://${CLOUD_DEPLOY_DELIVERY_PIPELINE}/${CLOUD_DEPLOY_RELEASE}-artifacts.json .
+            apt-get update -y && apt-get install jq -y
+            image_tag=$(cat ${CLOUD_DEPLOY_RELEASE}-artifacts.json | jq -r .builds[0].tag | sed s/@.*$//)
+            project={your_project_id_for_development}
+            case ${CLOUD_DEPLOY_TARGET} in
+              "staging")
+                project={your_project_id_for_stabing}
+                ;;
+              "production")
+                project={your_project_id_for_production}
+                ;;
+              *)
+                ;;
+            esac
+            gcloud app deploy resources/${CLOUD_DEPLOY_TARGET}/app.yaml --promote --stop-previous-version --version=${CLOUD_DEPLOY_RELEASE} --quiet --image-url=${image_tag} --project ${project}
+  - name: teardown
+    containers:
+      - name: teardown
+        image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+        command:
+          - "bash"
+          - "-c"
+          - |
+            gsutil cp gs://${CLOUD_DEPLOY_DELIVERY_PIPELINE}/${CLOUD_DEPLOY_RELEASE}.tar.gz .
+            tar xzvf ${CLOUD_DEPLOY_RELEASE}.tar.gz
+            project={your_project_id_for_development}
+            case ${CLOUD_DEPLOY_TARGET} in
+              "staging")
+                project={your_project_id_for_staging}
+                ;;
+              "production")
+                project={your_project_id_for_production}
+                ;;
+              *)
+                ;;
+            esac
+            gcloud builds submit --config ./hooks/cloudbuild.teardown.yaml --region {your_location} --no-source --project ${project}

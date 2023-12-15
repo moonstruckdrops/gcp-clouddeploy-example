@@ -1,0 +1,12 @@
+steps:
+- id: teardown
+  name: gcr.io/cloud-builders/gcloud
+  args: [
+  "app",
+  "versions",
+  "list"
+  ]
+  timeout: 900s
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

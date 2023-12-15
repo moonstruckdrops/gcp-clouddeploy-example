@@ -1,0 +1,99 @@
+apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: {your_pipeline_name}
+serialPipeline:
+  stages:
+    - targetId: development
+      profiles:
+        - development
+      strategy:
+        standard:
+          predeploy:
+            actions: ["setup"]
+          postdeploy:
+            actions: ["post-deploy", "teardown"]
+    - targetId: staging
+      profiles:
+        - staging
+      strategy:
+        standard:
+          predeploy:
+            actions: ["setup"]
+          postdeploy:
+            actions: ["post-deploy", "teardown"]
+    - targetId: production
+      profiles:
+        - production
+      strategy:
+        standard:
+          predeploy:
+            actions: ["setup"]
+          postdeploy:
+            actions: ["post-deploy", "teardown"]
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+ name: development
+description: deploy application for development
+requireApproval: false
+run:
+  location: {your_clodrun_location_for_development}
+executionConfigs:
+  - usages:
+      - RENDER
+      - PREDEPLOY
+      - DEPLOY
+      - VERIFY
+      - POSTDEPLOY
+    executionTimeout: 7200s
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+ name: staging
+description: deploy application for staging
+requireApproval: false
+run:
+  location: {your_clodrun_location_for_staging}
+executionConfigs:
+  - usages:
+      - RENDER
+      - PREDEPLOY
+      - DEPLOY
+      - VERIFY
+      - POSTDEPLOY
+    executionTimeout: 7200s
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: Target
+metadata:
+ name: production
+description: deploy application for production
+requireApproval: true
+run:
+  location: {your_clodrun_location_for_production}
+executionConfigs:
+  - usages:
+      - RENDER
+      - PREDEPLOY
+      - DEPLOY
+      - VERIFY
+      - POSTDEPLOY
+    executionTimeout: 7200s
+---
+apiVersion: deploy.cloud.google.com/v1
+kind: Automation
+metadata:
+  name: {your_pipeline_name}/development-to-staging
+description: rollout development to staging
+suspended: false
+serviceAccount: {your_service_account}
+selector:
+  - target:
+      id: development
+rules:
+  - promoteRelease:
+      name: development-to-staging
+      destinationTargetId: "@next"
